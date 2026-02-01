@@ -1,0 +1,36 @@
+cabal-version: 3.0
+name: test-lib
+version: 0.1.0.0
+license-file: LICENSE
+author: George Thomas
+maintainer: georgefsthomas@gmail.com
+
+library
+    hs-source-dirs: src
+    exposed-modules:
+        TestLib
+    default-language: GHC2024
+    default-extensions:
+        BlockArguments
+        OverloadedRecordDot
+        OverloadedStrings
+        PackageImports
+        RecordWildCards
+        ViewPatterns
+        NoFieldSelectors
+    ghc-options:
+        -Wall
+    build-depends:
+        base,
+        ansi-terminal,
+        containers,
+        deepseq,
+        directory,
+        exceptions,
+        file-io,
+        filepath,
+        mtl,
+        pretty-simple,
+        text,
+        time,
+        transformers,
