@@ -37,6 +37,7 @@ import Data.Tree
 import System.Console.ANSI
 import System.Directory
 import System.FilePath
+import Text.Pretty.Simple (pShowNoColor)
 
 data TestTree m input where
     TestTree :: TestName -> TestCase m input output -> [TestTree m output] -> TestTree m input
@@ -90,7 +91,7 @@ data TestFailure
     = ExceptionFailure SomeException
     | AssertionFailure Text
     | GoldenMissing
-    | GoldenFailure {expected :: Text, actual :: Text}
+    | NotEqual {expected :: Text, actual :: Text}
 
 newtype TestName = TestName Text
 
@@ -117,7 +118,7 @@ displayTestResultsConsole terminalWidth testResult =
                                     ExceptionFailure ex -> "Exception: " <> T.show ex
                                     AssertionFailure t -> "Assertion failed: " <> T.stripEnd t
                                     GoldenMissing -> "Golden file missing"
-                                    GoldenFailure{expected, actual} ->
+                                    NotEqual{expected, actual} ->
                                         "Expected:\n" <> T.stripEnd expected <> "\nActual:\n" <> T.stripEnd actual
               where
                 displayLogs =
@@ -220,8 +221,16 @@ runTests opts r0 (TestTree name tc ts) =
         t1 <- liftIO getCurrentTime
         pure (rf, diffUTCTime t1 t0)
 
-assertEqual :: (Eq p, Monad m) => p -> p -> Test m ()
-assertEqual expected actual = assert "not equal" (expected == actual)
+assertEqual :: (Eq p, Monad m, Show p) => p -> p -> Test m ()
+assertEqual expected actual =
+    if expected == actual
+        then pure ()
+        else
+            throwError $
+                NotEqual
+                    { expected = TL.toStrict $ pShowNoColor expected
+                    , actual = TL.toStrict $ pShowNoColor actual
+                    }
 assert :: (Monad m) => Text -> Bool -> Test m ()
 assert s b = if b then pure () else assertFailure s
 assertFailure :: (Monad m) => Text -> Test m a
@@ -233,7 +242,7 @@ golden file actual = do
     if exists
         then do
             expected <- liftIO $ T.readFile file
-            if expected == actual then pure () else throwError $ GoldenFailure{expected, actual}
+            if expected == actual then pure () else throwError $ NotEqual{expected, actual}
         else do
             if regenerateGoldenFiles
                 then
