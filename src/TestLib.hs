@@ -101,7 +101,8 @@ getTestTree (TestTree (TestName name) _ ts) = Node name $ map getTestTree ts
 
 displayTestResultsConsole :: Maybe Int -> TestResult -> TL.Text
 displayTestResultsConsole terminalWidth testResult =
-    displayResult 0 testResult <> TL.pack (setSGRCode [Reset])
+    displayResult 0 testResult
+        <> TL.pack (setSGRCode [Reset])
   where
     displayResult indent =
         (TL.replicate indent "  " <>) . \case
