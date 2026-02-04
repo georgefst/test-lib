@@ -26,11 +26,12 @@ import Control.Monad.Writer
 import Data.Bitraversable
 import Data.Fixed (Fixed (MkFixed))
 import Data.Foldable
+import Data.Int (Int64)
 import Data.Maybe
 import Data.Text (Text)
 import Data.Text qualified as T
-import Data.Text.IO qualified as T
 import Data.Text.Lazy qualified as TL
+import Data.Text.Lazy.IO qualified as TL
 import Data.Time
 import Data.Traversable
 import Data.Tree
@@ -91,7 +92,7 @@ data TestFailure
     = ExceptionFailure SomeException
     | AssertionFailure Text
     | GoldenMissing
-    | NotEqual {expected :: Text, actual :: Text}
+    | NotEqual {expected :: TL.Text, actual :: TL.Text}
 
 newtype TestName = TestName Text
 
@@ -103,23 +104,22 @@ displayTestResultsConsole terminalWidth testResult =
     displayResult 0 testResult <> TL.pack (setSGRCode [Reset])
   where
     displayResult indent =
-        (TL.replicate (fromIntegral indent) "  " <>) . \case
-            TestResult{name = TestName name, logs, result} ->
+        (TL.replicate indent "  " <>) . \case
+            TestResult{name = TestName (TL.fromStrict -> name), logs, result} ->
                 case result of
                     Right (dt, children) ->
-                        TL.fromStrict (header Green '✓' name indent (Just dt) <> displayLogs)
+                        header Green '✓' name indent (Just dt) <> displayLogs
                             <> TL.concat (map (displayResult (indent + 1)) children)
                     Left e ->
-                        TL.fromStrict $
                             header Red '✗' name indent Nothing
                                 <> displayLogs
                                 <> setColour Vivid Red
                                 <> indentAllLines indent case e of
-                                    ExceptionFailure ex -> "Exception: " <> T.show ex
-                                    AssertionFailure t -> "Assertion failed: " <> T.stripEnd t
+                                    ExceptionFailure ex -> "Exception: " <> TL.show ex
+                                    AssertionFailure t -> TL.fromStrict $ "Assertion failed: " <> T.stripEnd t
                                     GoldenMissing -> "Golden file missing"
                                     NotEqual{expected, actual} ->
-                                        "Expected:\n" <> T.stripEnd expected <> "\nActual:\n" <> T.stripEnd actual
+                                        "Expected:\n" <> TL.stripEnd expected <> "\nActual:\n" <> TL.stripEnd actual
               where
                 displayLogs =
                     setColour Dull Magenta
@@ -131,30 +131,29 @@ displayTestResultsConsole terminalWidth testResult =
                         <> setColour Dull Magenta
     header colour icon name indent time =
         setColour Vivid colour
-            <> T.singleton icon
+            <> TL.singleton icon
             <> " "
             <> setColour Dull White
             <> name
             <> maybe
                 mempty
                 ( \t@(showTime -> tt) ->
-                    T.replicate
-                        ( fromIntegral $
+                    TL.replicate (
                             maybe
                                 3
-                                (\n -> n - (2 * indent + T.length name + T.length tt + 4))
-                                terminalWidth
+                                (\n -> n - (2 * indent + TL.length name + TL.length tt + 4))
+                                (fromIntegral @Int @Int64 <$> terminalWidth)
                         )
                         " "
                         <> setColour Dull Blue
                         <> tt
                         <> " "
-                        <> T.singleton (timeBarFunction t)
+                        <> TL.singleton (timeBarFunction t)
                 )
                 time
             <> "\n"
-    paddedAllLines p = T.unlines . map (p <>) . T.lines
-    indentAllLines indent = paddedAllLines $ T.replicate (indent * 2) " "
+    paddedAllLines p = TL.unlines . map (p <>) . TL.lines
+    indentAllLines indent = paddedAllLines $ TL.replicate (indent * 2) " "
     timeBarFunction t
         | t < 0.01 = ' '
         | t < 0.03 = '▁'
@@ -167,11 +166,11 @@ displayTestResultsConsole terminalWidth testResult =
         | otherwise = '█'
     showTime (nominalDiffTimeToSeconds -> MkFixed duration) =
         -- SI prefixes, and always exactly 2 decimal places, or 3 if there's no prefix
-        T.show res
-            <> T.singleton '.'
-            <> T.take (if isNothing unit then 3 else 2) (T.show frac <> "000")
-            <> foldMap T.singleton unit
-            <> T.singleton 's'
+        TL.show res
+            <> TL.singleton '.'
+            <> TL.take (if isNothing unit then 3 else 2) (TL.show frac <> "000")
+            <> foldMap TL.singleton unit
+            <> TL.singleton 's'
       where
         (frac, res, unit) = case duration of
             0 -> (0, 0, Nothing)
@@ -190,7 +189,7 @@ displayTestResultsConsole terminalWidth testResult =
                             _ -> 'p'
                         )
                     (d, r) -> go (succ iterations) r d
-    sgr = T.pack . setSGRCode
+    sgr = TL.pack . setSGRCode
     setColour d c = sgr [SetColor Foreground d c]
 
 data TestRunnerOpts = TestRunnerOpts
@@ -228,20 +227,20 @@ assertEqual expected actual =
         else
             throwError $
                 NotEqual
-                    { expected = TL.toStrict $ pShowNoColor expected
-                    , actual = TL.toStrict $ pShowNoColor actual
+                    { expected = pShowNoColor expected
+                    , actual = pShowNoColor actual
                     }
 assert :: (Monad m) => Text -> Bool -> Test m ()
 assert s b = if b then pure () else assertFailure s
 assertFailure :: (Monad m) => Text -> Test m a
 assertFailure = throwError . AssertionFailure
-golden :: (MonadIO m, MonadFail m) => FilePath -> Text -> Test m ()
+golden :: (MonadIO m, MonadFail m) => FilePath -> TL.Text -> Test m ()
 golden file actual = do
     TestRunnerOpts{..} <- ask
     exists <- liftIO $ doesFileExist file
     if exists
         then do
-            expected <- liftIO $ T.readFile file
+            expected <- liftIO $ TL.readFile file
             if expected == actual then pure () else throwError $ NotEqual{expected, actual}
         else do
             if regenerateGoldenFiles
@@ -251,6 +250,6 @@ golden file actual = do
                             for_ parents \dir -> do
                                 parentExists <- liftIO $ doesDirectoryExist dir
                                 when (not parentExists) $ createDirectory dir
-                            T.writeFile file actual
+                            TL.writeFile file actual
                 else
                     throwError GoldenMissing
