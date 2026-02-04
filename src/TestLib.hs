@@ -108,18 +108,19 @@ displayTestResultsConsole terminalWidth testResult =
             TestResult{name = TestName (TL.fromStrict -> name), logs, result} ->
                 case result of
                     Right (dt, children) ->
-                        header Green '✓' name indent (Just dt) <> displayLogs
+                        header Green '✓' name indent (Just dt)
+                            <> displayLogs
                             <> TL.concat (map (displayResult (indent + 1)) children)
                     Left e ->
-                            header Red '✗' name indent Nothing
-                                <> displayLogs
-                                <> setColour Vivid Red
-                                <> indentAllLines indent case e of
-                                    ExceptionFailure ex -> "Exception: " <> TL.show ex
-                                    AssertionFailure t -> TL.fromStrict $ "Assertion failed: " <> T.stripEnd t
-                                    GoldenMissing -> "Golden file missing"
-                                    NotEqual{expected, actual} ->
-                                        "Expected:\n" <> TL.stripEnd expected <> "\nActual:\n" <> TL.stripEnd actual
+                        header Red '✗' name indent Nothing
+                            <> displayLogs
+                            <> setColour Vivid Red
+                            <> indentAllLines indent case e of
+                                ExceptionFailure ex -> "Exception: " <> TL.show ex
+                                AssertionFailure t -> TL.fromStrict $ "Assertion failed: " <> T.stripEnd t
+                                GoldenMissing -> "Golden file missing"
+                                NotEqual{expected, actual} ->
+                                    "Expected:\n" <> TL.stripEnd expected <> "\nActual:\n" <> TL.stripEnd actual
               where
                 displayLogs =
                     setColour Dull Magenta
@@ -138,11 +139,11 @@ displayTestResultsConsole terminalWidth testResult =
             <> maybe
                 mempty
                 ( \t@(showTime -> tt) ->
-                    TL.replicate (
-                            maybe
-                                3
-                                (\n -> n - (2 * indent + TL.length name + TL.length tt + 4))
-                                (fromIntegral @Int @Int64 <$> terminalWidth)
+                    TL.replicate
+                        ( maybe
+                            3
+                            (\n -> n - (2 * indent + TL.length name + TL.length tt + 4))
+                            (fromIntegral @Int @Int64 <$> terminalWidth)
                         )
                         " "
                         <> setColour Dull Blue
